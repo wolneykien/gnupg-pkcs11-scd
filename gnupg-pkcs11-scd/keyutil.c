@@ -64,7 +64,8 @@ keyutil_get_cert_params (
 	char *a_hex = NULL, *b_hex = NULL;
 #endif
 
-	keyutil_params_cleanup (params);
+	params->a = NULL;
+	params->b = NULL;
 
 #if defined(ENABLE_GNUTLS)
 	if (gnutls_x509_crt_init (&cert) != GNUTLS_E_SUCCESS) {
