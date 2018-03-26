@@ -128,6 +128,7 @@ keyutil_get_cert_params (
 			error = GPG_ERR_BAD_KEY;
 			goto cleanup;
 		}
+		break;
 	default:
 		error = GPG_ERR_WRONG_PUBKEY_ALGO;
 		goto cleanup;
