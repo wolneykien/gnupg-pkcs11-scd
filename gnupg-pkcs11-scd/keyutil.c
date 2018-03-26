@@ -126,7 +126,7 @@ keyutil_get_cert_params (
 		}
 		BN_free(X); BN_free(Y);
 		if (!ret) {
-			error = GPG_ERR_BAD_KEY;
+			error = GPG_ERR_BAD_CERT;
 			goto cleanup;
 		}
 		break;
@@ -136,7 +136,7 @@ keyutil_get_cert_params (
 	}
 
 	if (a_hex == NULL || b_hex == NULL) {
-		error = GPG_ERR_BAD_KEY;
+		error = GPG_ERR_BAD_CERT;
 		goto cleanup;
 	}
  
@@ -265,7 +265,7 @@ keyutil_get_cert_sexp (
 			curve_name = "GOST2001-CryptoPro-C";
 			break;
 		default:
-			error = GPG_ERR_BAD_KEY;
+			error = GPG_ERR_BAD_CERT;
 			goto cleanup;
 		}
 		if (
@@ -286,7 +286,7 @@ keyutil_get_cert_sexp (
 		}
 		break;
 	default:
-		error = GPG_ERR_BAD_KEY;
+		error = GPG_ERR_BAD_CERT;
 		goto cleanup;
 	}
 	
