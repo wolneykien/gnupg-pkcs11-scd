@@ -44,11 +44,11 @@ gpg_err_code_t
 keyutil_get_cert_params (
 	unsigned char *der,
 	size_t len,
-	cert_params_t *params
+	cert_params_t **params
 );
 
 void
-keyutil_params_cleanup (cert_params_t *params);
+keyutil_params_free (cert_params_t *params);
 
 gpg_err_code_t
 keyutil_get_cert_sexp (

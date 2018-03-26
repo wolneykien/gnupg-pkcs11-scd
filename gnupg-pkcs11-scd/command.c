@@ -1674,7 +1674,7 @@ gpg_error_t cmd_genkey (assuan_context_t ctx, char *line)
 {
 	gpg_err_code_t error = GPG_ERR_GENERAL;
 	pkcs11h_certificate_id_t cert_id = NULL;
-	cert_params_t params;
+	cert_params_t *params = NULL;
 	unsigned char *a_hex = NULL;
 	unsigned char *b_hex = NULL;
 	char *a_resp = NULL;
@@ -1771,20 +1771,20 @@ gpg_error_t cmd_genkey (assuan_context_t ctx, char *line)
 			GCRYMPI_FMT_HEX,
 			&a_hex,
 			NULL,
-			params.a
+			params->a
 		) ||
 		gcry_mpi_aprint (
 			GCRYMPI_FMT_HEX,
 			&b_hex,
 			NULL,
-			params.b
+			params->b
 		)
 	) {
 		error = GPG_ERR_BAD_KEY;
 		goto cleanup;
 	}
 
-	switch (params.key_type) {
+	switch (params->key_type) {
 	case KEY_RSA:
 		a_resp = strdup ("n ");
 		b_resp = strdup ("e ");
@@ -1835,7 +1835,7 @@ gpg_error_t cmd_genkey (assuan_context_t ctx, char *line)
 
 cleanup:
 
-	keyutil_params_cleanup (&params);
+	keyutil_params_free (params);
 
 	if (a_hex != NULL) {
 		gcry_free (a_hex);

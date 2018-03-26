@@ -51,21 +51,23 @@ gpg_err_code_t
 keyutil_get_cert_params (
 	unsigned char *der,
 	size_t len,
-	cert_params_t *params
+	cert_params_t **params
 ) {
 	gpg_err_code_t error = GPG_ERR_GENERAL;
 #if defined(ENABLE_GNUTLS)
 	gnutls_x509_crt_t cert = NULL;
 	gnutls_datum_t datum = {der, len};
 	gnutls_datum_t m = {NULL, 0}, e = {NULL, 0};
+	*params = gnutls_malloc (sizeof (**params));
 #elif defined(ENABLE_OPENSSL)
 	X509 *x509 = NULL;
 	EVP_PKEY *pubkey = NULL;
 	char *a_hex = NULL, *b_hex = NULL;
+	*params = OPENSSL_malloc (sizeof (**params));
 #endif
 
-	params->a = NULL;
-	params->b = NULL;
+	(*params)->a = NULL;
+	(*params)->b = NULL;
 
 #if defined(ENABLE_GNUTLS)
 	if (gnutls_x509_crt_init (&cert) != GNUTLS_E_SUCCESS) {
@@ -86,11 +88,11 @@ keyutil_get_cert_params (
 		goto cleanup;
 	}
 
-	params->key_type = KEY_RSA;
+	(*params)->key_type = KEY_RSA;
 
 	if (
-		gcry_mpi_scan(&params->a, GCRYMPI_FMT_USG, m.data, m.size, NULL) ||
-		gcry_mpi_scan(&params->b, GCRYMPI_FMT_USG, e.data, e.size, NULL)
+		gcry_mpi_scan(&(*params)->a, GCRYMPI_FMT_USG, m.data, m.size, NULL) ||
+		gcry_mpi_scan(&(*params)->b, GCRYMPI_FMT_USG, e.data, e.size, NULL)
 	) {
 		error = GPG_ERR_BAD_KEY;
 		goto cleanup;
@@ -108,16 +110,16 @@ keyutil_get_cert_params (
 
 	switch (pubkey->type) {
 	case EVP_PKEY_RSA:
-		params->key_type = KEY_RSA;
+		(*params)->key_type = KEY_RSA;
 		a_hex = BN_bn2hex (pubkey->pkey.rsa->n);
 		b_hex = BN_bn2hex (pubkey->pkey.rsa->e);
 		break;
 	case EVP_PKEY_GOSTR01:
-		params->key_type = KEY_GOSTR01;
+		(*params)->key_type = KEY_GOSTR01;
 		const EC_GROUP *group = GOST_KEY_get0_group(pubkey->pkey.gost);
 		const EC_POINT *pub_key = GOST_KEY_get0_public_key(pubkey->pkey.gost);
 		BIGNUM *X = BN_new(), *Y = BN_new();
-		params->nid = EC_GROUP_get_curve_name(group);
+		(*params)->nid = EC_GROUP_get_curve_name(group);
 		int ret = EC_POINT_get_affine_coordinates_GFp(group,
 													  pub_key, X, Y, NULL);
 		if (ret) {
@@ -141,11 +143,10 @@ keyutil_get_cert_params (
 	}
  
 	if (
-		gcry_mpi_scan (&params->a, GCRYMPI_FMT_HEX, a_hex, 0, NULL) ||
-		gcry_mpi_scan (&params->b, GCRYMPI_FMT_HEX, b_hex, 0, NULL)
+		gcry_mpi_scan (&(*params)->a, GCRYMPI_FMT_HEX, a_hex, 0, NULL) ||
+		gcry_mpi_scan (&(*params)->b, GCRYMPI_FMT_HEX, b_hex, 0, NULL)
 	) {
-		error = GPG_ERR_BAD_KEY;
-		keyutil_params_cleanup (params);
+		error = GPG_ERR_BAD_KEY;		
 		goto cleanup;
 	}
 #else
@@ -199,18 +200,30 @@ cleanup:
 #error Invalid configuration.
 #endif
 
+	if (error != GPG_ERR_NO_ERROR) {
+		keyutil_params_free (*params);
+		*params = NULL;
+	}
+	
 	return error;
 }
 
 void
-keyutil_params_cleanup (cert_params_t *params) {
-	if (params->a) {
-		gcry_mpi_release (params->a);
-		params->a = NULL;
-	}
-	if (params->b) {
-		gcry_mpi_release (params->b);
-		params->b = NULL;
+keyutil_params_free (cert_params_t *params) {
+	if (params) {
+		if (params->a) {
+			gcry_mpi_release (params->a);
+			params->a = NULL;
+		}
+		if (params->b) {
+			gcry_mpi_release (params->b);
+			params->b = NULL;
+		}
+#if defined(ENABLE_GNUTLS)
+		gnutls_free (params);
+#elif defined(ENABLE_OPENSSL)
+		OPENSSL_free (params);
+#endif
 	}
 }
 
@@ -227,7 +240,7 @@ keyutil_get_cert_sexp (
 	gcry_sexp_t *p_sexp
 ) {
 	gpg_err_code_t error = GPG_ERR_GENERAL;
-	cert_params_t params;
+	cert_params_t *params = NULL;
 	const char *curve_name = NULL;
 	gcry_sexp_t sexp = NULL;
 
@@ -238,15 +251,15 @@ keyutil_get_cert_sexp (
 		goto cleanup;
 	}
 
-	switch (params.key_type) {
+	switch (params->key_type) {
 	case KEY_RSA:
 		if (
 			gcry_sexp_build (
 			    &sexp,
 				NULL,
 				"(public-key (rsa (n %m) (e %m)))",
-				params.a,
-				params.b
+				params->a,
+				params->b
 			)
 		) {
 			error = GPG_ERR_BAD_KEY;
@@ -254,7 +267,7 @@ keyutil_get_cert_sexp (
 		}
 		break;
 	case KEY_GOSTR01:
-		switch (params.nid) {
+		switch (params->nid) {
 		case NID_id_GostR3410_2001_TestParamSet:
 			curve_name = "GOST2001-test";
 			break;
@@ -280,8 +293,8 @@ keyutil_get_cert_sexp (
 				"  (curve %s)\n"
 				"  (q %m%m)))\n",
 				curve_name,
-				params.a,
-				params.b
+				params->a,
+				params->b
 			)
 		) {
 			error = GPG_ERR_BAD_KEY;
@@ -299,7 +312,7 @@ keyutil_get_cert_sexp (
 
 cleanup:
 
-	keyutil_params_cleanup (&params);
+	keyutil_params_free (params);
 
 	if (sexp != NULL) {
 		gcry_sexp_release (sexp);
