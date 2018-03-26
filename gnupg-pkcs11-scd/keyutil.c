@@ -255,13 +255,16 @@ keyutil_get_cert_sexp (
 		break;
 	case KEY_GOSTR01:
 		switch (params.nid) {
-		case NID_id_Gost28147_89_CryptoPro_A_ParamSet:
+		case NID_id_GostR3410_2001_TestParamSet:
+			curve_name = "GOST2001-test";
+			break;
+		case NID_id_GostR3410_2001_CryptoPro_A_ParamSet:
 			curve_name = "GOST2001-CryptoPro-A";
 			break;
-		case NID_id_Gost28147_89_CryptoPro_B_ParamSet:
+		case NID_id_GostR3410_2001_CryptoPro_B_ParamSet:
 			curve_name = "GOST2001-CryptoPro-B";
 			break;
-		case NID_id_Gost28147_89_CryptoPro_C_ParamSet:
+		case NID_id_GostR3410_2001_CryptoPro_C_ParamSet:
 			curve_name = "GOST2001-CryptoPro-C";
 			break;
 		default:
