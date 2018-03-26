@@ -31,13 +31,24 @@
 #ifndef __KEYUTIL_H
 #define __KEYUTIL_H
 
+typedef enum {KEY_RSA, KEY_GOSTR01} key_type_t;
+
+typedef struct {
+	key_type_t key_type;
+	int nid;
+	gcry_mpi_t a;
+	gcry_mpi_t b;
+} cert_params_t;
+
 gpg_err_code_t
-keyutil_get_cert_mpi (
+keyutil_get_cert_params (
 	unsigned char *der,
 	size_t len,
-	gcry_mpi_t *p_n_mpi,
-	gcry_mpi_t *p_e_mpi
+	cert_params_t *params
 );
+
+void
+keyutil_params_cleanup (cert_params_t *params);
 
 gpg_err_code_t
 keyutil_get_cert_sexp (
@@ -46,6 +57,7 @@ keyutil_get_cert_sexp (
 	gcry_sexp_t *p_sexp
 );
 
-char *keyutil_get_cert_hexgrip (gcry_sexp_t sexp);
+char *
+keyutil_get_cert_hexgrip (gcry_sexp_t sexp);
 
 #endif

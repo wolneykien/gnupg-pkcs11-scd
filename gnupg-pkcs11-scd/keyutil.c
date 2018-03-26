@@ -34,6 +34,7 @@
 #endif
 #if defined(ENABLE_OPENSSL)
 #include <openssl/x509.h>
+#include <openssl/gost.h>
 #endif
 #include "encoding.h"
 #include "keyutil.h"
@@ -47,15 +48,12 @@ typedef const unsigned char *my_openssl_d2i_t;
 #endif
 
 gpg_err_code_t
-keyutil_get_cert_mpi (
+keyutil_get_cert_params (
 	unsigned char *der,
 	size_t len,
-	gcry_mpi_t *p_n_mpi,
-	gcry_mpi_t *p_e_mpi
+	cert_params_t *params
 ) {
 	gpg_err_code_t error = GPG_ERR_GENERAL;
-	gcry_mpi_t n_mpi = NULL;
-	gcry_mpi_t e_mpi = NULL;
 #if defined(ENABLE_GNUTLS)
 	gnutls_x509_crt_t cert = NULL;
 	gnutls_datum_t datum = {der, len};
@@ -63,11 +61,10 @@ keyutil_get_cert_mpi (
 #elif defined(ENABLE_OPENSSL)
 	X509 *x509 = NULL;
 	EVP_PKEY *pubkey = NULL;
-	char *n_hex = NULL, *e_hex = NULL;
+	char *a_hex = NULL, *b_hex = NULL;
 #endif
 
-	*p_n_mpi = NULL;
-	*p_e_mpi = NULL;
+	keyutil_params_cleanup (params);
 
 #if defined(ENABLE_GNUTLS)
 	if (gnutls_x509_crt_init (&cert) != GNUTLS_E_SUCCESS) {
@@ -88,9 +85,11 @@ keyutil_get_cert_mpi (
 		goto cleanup;
 	}
 
+	params->key_type = KEY_RSA;
+
 	if (
-		gcry_mpi_scan(&n_mpi, GCRYMPI_FMT_USG, m.data, m.size, NULL) ||
-		gcry_mpi_scan(&e_mpi, GCRYMPI_FMT_USG, e.data, e.size, NULL)
+		gcry_mpi_scan(&params->a, GCRYMPI_FMT_USG, m.data, m.size, NULL) ||
+		gcry_mpi_scan(&params->b, GCRYMPI_FMT_USG, e.data, e.size, NULL)
 	) {
 		error = GPG_ERR_BAD_KEY;
 		goto cleanup;
@@ -105,23 +104,43 @@ keyutil_get_cert_mpi (
 		error = GPG_ERR_BAD_CERT;
 		goto cleanup;
 	}
- 
-	if (pubkey->type != EVP_PKEY_RSA) {
+
+	switch (pubkey->type) {
+	case EVP_PKEY_RSA:
+		params->key_type = KEY_RSA;
+		a_hex = BN_bn2hex (pubkey->pkey.rsa->n);
+		b_hex = BN_bn2hex (pubkey->pkey.rsa->e);
+		break;
+	case EVP_PKEY_GOSTR01:
+		params->key_type = KEY_GOSTR01;
+		const EC_GROUP *group = GOST_KEY_get0_group(pubkey->pkey.gost);
+		const EC_POINT *pub_key = GOST_KEY_get0_public_key(pubkey->pkey.gost);
+		BIGNUM *X = BN_new(), *Y = BN_new();
+		params->nid = EC_GROUP_get_curve_name(group);
+		int ret = EC_POINT_get_affine_coordinates_GFp(group,
+													  pub_key, X, Y, NULL);
+		if (ret) {
+			a_hex = BN_bn2hex (X);
+			b_hex = BN_bn2hex (Y);
+		}
+		BN_free(X); BN_free(Y);
+		if (!ret) {
+			error = GPG_ERR_BAD_KEY;
+			goto cleanup;
+		}
+	default:
 		error = GPG_ERR_WRONG_PUBKEY_ALGO;
 		goto cleanup;
 	}
 
-	n_hex = BN_bn2hex (pubkey->pkey.rsa->n);
-	e_hex = BN_bn2hex (pubkey->pkey.rsa->e);
-
-	if(n_hex == NULL || e_hex == NULL) {
+	if (a_hex == NULL || b_hex == NULL) {
 		error = GPG_ERR_BAD_KEY;
 		goto cleanup;
 	}
  
 	if (
-		gcry_mpi_scan (&n_mpi, GCRYMPI_FMT_HEX, n_hex, 0, NULL) ||
-		gcry_mpi_scan (&e_mpi, GCRYMPI_FMT_HEX, e_hex, 0, NULL)
+		gcry_mpi_scan (&params->a, GCRYMPI_FMT_HEX, a_hex, 0, NULL) ||
+		gcry_mpi_scan (&params->b, GCRYMPI_FMT_HEX, b_hex, 0, NULL)
 	) {
 		error = GPG_ERR_BAD_KEY;
 		goto cleanup;
@@ -130,23 +149,11 @@ keyutil_get_cert_mpi (
 #error Invalid configuration.
 #endif
 
-	*p_n_mpi = n_mpi;
-	n_mpi = NULL;
-	*p_e_mpi = e_mpi;
-	e_mpi = NULL;
 	error = GPG_ERR_NO_ERROR;
 
 cleanup:
-
-	if (n_mpi != NULL) {
-		gcry_mpi_release (n_mpi);
-		n_mpi = NULL;
-	}
-
-	if (e_mpi != NULL) {
-		gcry_mpi_release (e_mpi);
-		e_mpi = NULL;
-	}
+	
+	keyutil_params_cleanup (params);
 
 #if defined(ENABLE_GNUTLS)
 
@@ -177,14 +184,14 @@ cleanup:
 		pubkey = NULL;
 	}
 
-	if (n_hex != NULL) {
-		OPENSSL_free (n_hex);
-		n_hex = NULL;
+	if (a_hex != NULL) {
+		OPENSSL_free (a_hex);
+		a_hex = NULL;
 	}
-
-	if (e_hex != NULL) {
-		OPENSSL_free (e_hex);
-		e_hex = NULL;
+	
+	if (b_hex != NULL) {
+		OPENSSL_free (b_hex);
+		b_hex = NULL;
 	}
 
 #else
@@ -193,6 +200,19 @@ cleanup:
 
 	return error;
 }
+
+void
+keyutil_params_cleanup (cert_params_t *params) {
+	if (params->a) {
+		gcry_mpi_release (params->a);
+		params->a = NULL;
+	}
+	if (params->b) {
+		gcry_mpi_release (params->b);
+		params->b = NULL;
+	}
+}
+
 /**
    Convert X.509 RSA public key into gcrypt internal sexp form. Only RSA
    public keys are accepted at the moment. The resul is stored in *sexp,
@@ -206,49 +226,63 @@ keyutil_get_cert_sexp (
 	gcry_sexp_t *p_sexp
 ) {
 	gpg_err_code_t error = GPG_ERR_GENERAL;
-	gcry_mpi_t n_mpi = NULL;
-	gcry_mpi_t e_mpi = NULL;
+	cert_params_t params;
+	const char *curve_name = NULL;
 	gcry_sexp_t sexp = NULL;
 
 	if (
-		(error = keyutil_get_cert_mpi (
-			der,
-			len,
-			&n_mpi,
-			&e_mpi
-		)) != GPG_ERR_NO_ERROR
+		(error = keyutil_get_cert_params (der, len, &params))
+		!= GPG_ERR_NO_ERROR
 	) {
 		goto cleanup;
 	}
 
-	if (
-		gcry_sexp_build (
-			&sexp,
-			NULL,
-			"(public-key (rsa (n %m) (e %m)))",
-			n_mpi,
-			e_mpi
-		)
-	) {
+	switch (params.key_type) {
+	case KEY_RSA:
+		if (
+			gcry_sexp_build (
+			    &sexp,
+				NULL,
+				"(public-key (rsa (n %m) (e %m)))",
+				params.a,
+				params.b
+			)
+		) {
+			error = GPG_ERR_BAD_KEY;
+			goto cleanup;
+		}
+		break;
+	case KEY_GOSTR01:
+		curve_name = "GOST2001-test"; //FIXME
+		if (
+			gcry_sexp_build (
+			    &sexp,
+				NULL,
+				"(public-key\n"
+				" (ecc\n"
+				"  (curve %s)\n"
+				"  (q %m%m)))\n",
+				curve_name,
+				params.a,
+				params.b
+			)
+		) {
+			error = GPG_ERR_BAD_KEY;
+			goto cleanup;
+		}
+		break;
+	default:
 		error = GPG_ERR_BAD_KEY;
 		goto cleanup;
 	}
-
+	
 	*p_sexp = sexp;
 	sexp = NULL;
 	error = GPG_ERR_NO_ERROR;
 
 cleanup:
 
-	if (n_mpi != NULL) {
-		gcry_mpi_release (n_mpi);
-		n_mpi = NULL;
-	}
-
-	if (e_mpi != NULL) {
-		gcry_mpi_release (e_mpi);
-		e_mpi = NULL;
-	}
+	keyutil_params_cleanup (&params);
 
 	if (sexp != NULL) {
 		gcry_sexp_release (sexp);
