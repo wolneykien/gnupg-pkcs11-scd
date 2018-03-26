@@ -145,6 +145,7 @@ keyutil_get_cert_params (
 		gcry_mpi_scan (&params->b, GCRYMPI_FMT_HEX, b_hex, 0, NULL)
 	) {
 		error = GPG_ERR_BAD_KEY;
+		keyutil_params_cleanup (params);
 		goto cleanup;
 	}
 #else
@@ -154,8 +155,6 @@ keyutil_get_cert_params (
 	error = GPG_ERR_NO_ERROR;
 
 cleanup:
-	
-	keyutil_params_cleanup (params);
 
 #if defined(ENABLE_GNUTLS)
 
