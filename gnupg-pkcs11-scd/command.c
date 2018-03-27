@@ -857,7 +857,7 @@ gpg_error_t cmd_readkey (assuan_context_t ctx, char *line)
 		(error = _get_certificate_by_name (
 			ctx,
 			line,
-			0,
+			OPENPGP_SIGN,
 			&cert_id,
 			NULL
 		)) != GPG_ERR_NO_ERROR ||
