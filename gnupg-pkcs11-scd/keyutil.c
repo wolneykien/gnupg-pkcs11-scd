@@ -243,6 +243,10 @@ keyutil_get_cert_sexp (
 	cert_params_t *params = NULL;
 	const char *curve_name = NULL;
 	gcry_sexp_t sexp = NULL;
+	unsigned char *a_hex = NULL;
+	unsigned char *b_hex = NULL;
+	unsigned char[65] q_hex;
+	gcry_mpi_t q_val;
 
 	if (
 		(error = keyutil_get_cert_params (der, len, &params))
@@ -284,6 +288,40 @@ keyutil_get_cert_sexp (
 			error = GPG_ERR_BAD_CERT;
 			goto cleanup;
 		}
+
+		if (
+			gcry_mpi_aprint (GCRYMPI_FMT_HEX,
+							 &a_hex,
+							 NULL,
+							 params->a) ||
+			gcry_mpi_aprint (GCRYMPI_FMT_HEX,
+							 &b_hex,
+							 NULL,
+							 params->b)
+		) {
+			error = GPG_ERR_BAD_KEY;
+			goto cleanup;
+		}
+
+		if (
+			strlen (a_hex) != 32 ||
+			strlen (b_hex) != 32
+		) {
+			error = GPG_ERR_BAD_KEY;
+			goto cleanup;
+		}
+
+		memcpy (q_hex, a_hex, 32);
+		memcpy (q_hex + 32, a_hex, 32);
+		q_hex[64] = '\0';
+		
+		if (
+			gcry_mpi_scan (&q_val, GCRYMPI_FMT_HEX, q_hex, 0, NULL);
+		) {
+			error = GPG_ERR_BAD_KEY;
+			goto cleanup;
+		}	
+		
 		if (
 			gcry_sexp_build (
 			    &sexp,
@@ -291,10 +329,9 @@ keyutil_get_cert_sexp (
 				"(public-key\n"
 				" (ecc\n"
 				"  (curve %s)\n"
-				"  (q %m%m)))\n",
+				"  (q %m)))\n",
 				curve_name,
-				params->a,
-				params->b
+				q_val
 			)
 		) {
 			error = GPG_ERR_BAD_KEY;
@@ -317,6 +354,21 @@ cleanup:
 	if (sexp != NULL) {
 		gcry_sexp_release (sexp);
 		sexp = NULL;
+	}
+
+	if (q_val) {
+		gcry_mpi_release (q_val);
+		q_val = NULL;
+	}
+	
+	if (a_hex != NULL) {
+		gcry_free (a_hex);
+		a_hex = NULL;
+	}
+
+	if (b_hex != NULL) {
+		gcry_free (b_hex);
+		b_hex = NULL;
 	}
 
 	return error;
