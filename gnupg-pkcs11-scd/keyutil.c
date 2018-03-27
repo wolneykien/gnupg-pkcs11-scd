@@ -245,7 +245,7 @@ keyutil_get_cert_sexp (
 	gcry_sexp_t sexp = NULL;
 	unsigned char *a_hex = NULL;
 	unsigned char *b_hex = NULL;
-	unsigned char[65] q_hex;
+	unsigned char q_hex[65];
 	gcry_mpi_t q_val;
 
 	if (
