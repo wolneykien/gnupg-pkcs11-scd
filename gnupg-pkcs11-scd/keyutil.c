@@ -316,7 +316,7 @@ keyutil_get_cert_sexp (
 		q_hex[64] = '\0';
 		
 		if (
-			gcry_mpi_scan (&q_val, GCRYMPI_FMT_HEX, q_hex, 0, NULL);
+			gcry_mpi_scan (&q_val, GCRYMPI_FMT_HEX, q_hex, 0, NULL)
 		) {
 			error = GPG_ERR_BAD_KEY;
 			goto cleanup;
