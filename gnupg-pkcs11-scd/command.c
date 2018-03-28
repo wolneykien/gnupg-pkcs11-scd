@@ -857,7 +857,7 @@ gpg_error_t cmd_readkey (assuan_context_t ctx, char *line)
 		(error = _get_certificate_by_name (
 			ctx,
 			line,
-			OPENPGP_SIGN,
+			0,
 			&cert_id,
 			NULL
 		)) != GPG_ERR_NO_ERROR ||
@@ -1675,10 +1675,9 @@ gpg_error_t cmd_genkey (assuan_context_t ctx, char *line)
 	gpg_err_code_t error = GPG_ERR_GENERAL;
 	pkcs11h_certificate_id_t cert_id = NULL;
 	cert_params_t *params = NULL;
-	unsigned char *a_hex = NULL;
-	unsigned char *b_hex = NULL;
-	char *a_resp = NULL;
-	char *b_resp = NULL;
+	unsigned char *hex[] = {NULL, NULL, NULL};
+	char *resp[] = {NULL, NULL, NULL};
+	int i, count = 0;
 	unsigned char *blob = NULL;
 	char *serial = NULL;
 	char *key = NULL;
@@ -1766,69 +1765,53 @@ gpg_error_t cmd_genkey (assuan_context_t ctx, char *line)
 		goto cleanup;
 	}
 
-	if (
-		gcry_mpi_aprint (
-			GCRYMPI_FMT_HEX,
-			&a_hex,
-			NULL,
-			params->a
-		) ||
-		gcry_mpi_aprint (
-			GCRYMPI_FMT_HEX,
-			&b_hex,
-			NULL,
-			params->b
-		)
-	) {
-		error = GPG_ERR_BAD_KEY;
-		goto cleanup;
-	}
-
 	switch (params->key_type) {
 	case KEY_RSA:
-		a_resp = strdup ("n ");
-		b_resp = strdup ("e ");
+		resp[0] = strdup ("n ");
+		resp[1] = strdup ("e ");
+		count = 2;
 		break;
-	case KEY_GOSTR01:
-		a_resp = strdup ("X ");
-		b_resp = strdup ("Y ");
+	case KEY_ECC:
+		resp[0] = strdup ("X ");
+		resp[1] = strdup ("Y ");
+		resp[2] = strdup ("Z ");
+		count = 3;
 		break;
 	default:
 		error = GPG_ERR_BAD_KEY;
 		goto cleanup;
 	}
 
-	if (a_resp != NULL && b_resp != NULL) {
-		if (
-			!encoding_strappend (&a_resp, (char *)a_hex) ||
-			!encoding_strappend (&b_resp, (char *)b_hex)
-		) {
+	gcry_mpi_t mpis[] = {params->a, params->b, params->c};
+	for (i = 0; i < count; ++i) {
+		if (resp[i] == NULL) {
 			error = GPG_ERR_ENOMEM;
 			goto cleanup;
 		}
-	} else {
-		error = GPG_ERR_ENOMEM;
-		goto cleanup;
-	}
-	
-	if (
-		(error = assuan_write_status(
-			ctx,
-			"KEY-DATA",
-			a_resp
-		)) != GPG_ERR_NO_ERROR
-	) {
-		goto cleanup;
-	}
-
-	if (
-		(error = assuan_write_status(
-			ctx,
-			"KEY-DATA",
-			b_resp
-		)) != GPG_ERR_NO_ERROR
-	) {
-		goto cleanup;
+		if (
+			gcry_mpi_aprint (
+			    GCRYMPI_FMT_HEX,
+				&hex[i],
+				NULL,
+				mpis[i]
+		    )
+		) {
+			error = GPG_ERR_BAD_KEY;
+			goto cleanup;
+		}
+		if (!encoding_strappend (&resp[i], (char *) hex[i])) {
+			error = GPG_ERR_ENOMEM;
+			goto cleanup;
+		}
+		if (
+			(error = assuan_write_status(
+			    ctx,
+				"KEY-DATA",
+				resp[i]
+			)) != GPG_ERR_NO_ERROR
+		) {
+			goto cleanup;
+		}
 	}
 
 	error = GPG_ERR_NO_ERROR;
@@ -1837,24 +1820,18 @@ cleanup:
 
 	keyutil_params_free (params);
 
-	if (a_hex != NULL) {
-		gcry_free (a_hex);
-		a_hex = NULL;
+	for (i = 0; i < sizeof(hex)/sizeof(hex[0]); ++i) {
+		if (hex[i] != NULL) {
+			gcry_free (hex[i]);
+			hex[i] = NULL;
+		}
 	}
 
-	if (b_hex != NULL) {
-		gcry_free (b_hex);
-		b_hex = NULL;
-	}
-
-	if (a_resp != NULL) {
-		free (a_resp);
-		a_resp = NULL;
-	}
-
-	if (b_resp != NULL) {
-		free (b_resp);
-		b_resp = NULL;
+	for (i = 0; i < sizeof(resp)/sizeof(resp[0]); ++i) {
+		if (resp[i] != NULL) {
+			free (resp[i]);
+			resp[i] = NULL;
+		}
 	}
 
 	if (blob != NULL) {

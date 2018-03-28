@@ -62,12 +62,13 @@ keyutil_get_cert_params (
 #elif defined(ENABLE_OPENSSL)
 	X509 *x509 = NULL;
 	EVP_PKEY *pubkey = NULL;
-	char *a_hex = NULL, *b_hex = NULL;
+	char *a_hex = NULL, *b_hex = NULL, *c_hex = NULL;
 	*params = OPENSSL_malloc (sizeof (**params));
 #endif
 
 	(*params)->a = NULL;
 	(*params)->b = NULL;
+	(*params)->c = NULL;
 
 #if defined(ENABLE_GNUTLS)
 	if (gnutls_x509_crt_init (&cert) != GNUTLS_E_SUCCESS) {
@@ -115,18 +116,21 @@ keyutil_get_cert_params (
 		b_hex = BN_bn2hex (pubkey->pkey.rsa->e);
 		break;
 	case EVP_PKEY_GOSTR01:
-		(*params)->key_type = KEY_GOSTR01;
+		(*params)->key_type = KEY_ECC;
 		const EC_GROUP *group = GOST_KEY_get0_group(pubkey->pkey.gost);
 		const EC_POINT *pub_key = GOST_KEY_get0_public_key(pubkey->pkey.gost);
-		BIGNUM *X = BN_new(), *Y = BN_new();
+		BIGNUM *X = BN_new(), *Y = BN_new(), *Z = BN_new();;
 		(*params)->nid = EC_GROUP_get_curve_name(group);
-		int ret = EC_POINT_get_affine_coordinates_GFp(group,
-													  pub_key, X, Y, NULL);
+		int ret = EC_POINT_get_Jprojective_coordinates_GFp(group,
+														   pub_key,
+														   X, Y, Z,
+														   NULL);
 		if (ret) {
 			a_hex = BN_bn2hex (X);
 			b_hex = BN_bn2hex (Y);
+			c_hex = BN_bn2hex (Z);
 		}
-		BN_free(X); BN_free(Y);
+		BN_free(X); BN_free(Y);; BN_free(Z);
 		if (!ret) {
 			error = GPG_ERR_BAD_CERT;
 			goto cleanup;
@@ -137,14 +141,15 @@ keyutil_get_cert_params (
 		goto cleanup;
 	}
 
-	if (a_hex == NULL || b_hex == NULL) {
+	if (a_hex == NULL || b_hex == NULL || c_hex == NULL) {
 		error = GPG_ERR_BAD_CERT;
 		goto cleanup;
 	}
  
 	if (
 		gcry_mpi_scan (&(*params)->a, GCRYMPI_FMT_HEX, a_hex, 0, NULL) ||
-		gcry_mpi_scan (&(*params)->b, GCRYMPI_FMT_HEX, b_hex, 0, NULL)
+		gcry_mpi_scan (&(*params)->b, GCRYMPI_FMT_HEX, b_hex, 0, NULL) ||
+		gcry_mpi_scan (&(*params)->c, GCRYMPI_FMT_HEX, c_hex, 0, NULL)
 	) {
 		error = GPG_ERR_BAD_KEY;		
 		goto cleanup;
@@ -185,15 +190,18 @@ cleanup:
 		EVP_PKEY_free(pubkey);
 		pubkey = NULL;
 	}
-
+	
 	if (a_hex != NULL) {
 		OPENSSL_free (a_hex);
 		a_hex = NULL;
 	}
-	
 	if (b_hex != NULL) {
 		OPENSSL_free (b_hex);
 		b_hex = NULL;
+	}
+	if (c_hex != NULL) {
+		OPENSSL_free (c_hex);
+		c_hex = NULL;
 	}
 
 #else
@@ -219,6 +227,10 @@ keyutil_params_free (cert_params_t *params) {
 			gcry_mpi_release (params->b);
 			params->b = NULL;
 		}
+		if (params->c) {
+			gcry_mpi_release (params->c);
+			params->c = NULL;
+		}
 #if defined(ENABLE_GNUTLS)
 		gnutls_free (params);
 #elif defined(ENABLE_OPENSSL)
@@ -242,6 +254,8 @@ keyutil_get_cert_sexp (
 	gpg_err_code_t error = GPG_ERR_GENERAL;
 	cert_params_t *params = NULL;
 	const char *curve_name = NULL;
+	gcry_ctx_t r_ctx = NULL;
+	gcry_sexp_t keyparam = NULL;
 	gcry_sexp_t sexp = NULL;
 
 	if (
@@ -266,7 +280,7 @@ keyutil_get_cert_sexp (
 			goto cleanup;
 		}
 		break;
-	case KEY_GOSTR01:
+	case KEY_ECC:
 		switch (params->nid) {
 		case NID_id_GostR3410_2001_TestParamSet:
 			curve_name = "GOST2001-test";
@@ -287,21 +301,46 @@ keyutil_get_cert_sexp (
 		
 		if (
 			gcry_sexp_build (
-			    &sexp,
+			    &keyparam,
 				NULL,
 				"(public-key\n"
 				" (ecc\n"
 				"  (curve %s)\n"
 				"  (q.x %m)\n"
-				"  (q.y %m)))\n",
+				"  (q.y %m)\n"
+				"  (q.z %m)))\n",
 				curve_name,
 				params->a,
-				params->b
+				params->b,
+				params->c
 			)
 		) {
 			error = GPG_ERR_BAD_KEY;
 			goto cleanup;
 		}
+
+		error = gcry_mpi_ec_new (&r_ctx,
+								 keyparam,
+								 curve_name);
+		if (error != GPG_ERR_NO_ERROR) {
+			goto cleanup;
+		}
+
+		if (
+			gcry_sexp_build (
+			    &sexp,
+				NULL,
+				"(public-key\n"
+				" (ecc\n"
+				"  (curve %s)\n"
+				"  (q %m)))\n",
+				curve_name,
+				gcry_mpi_ec_get_mpi ("q", r_ctx, 1)
+			)
+		) {
+			error = GPG_ERR_BAD_KEY;
+			goto cleanup;
+		}		
 		break;
 	default:
 		error = GPG_ERR_BAD_CERT;
@@ -316,6 +355,14 @@ cleanup:
 
 	keyutil_params_free (params);
 
+	if (keyparam != NULL) {
+		gcry_sexp_release (keyparam);
+		keyparam = NULL;
+	}
+	if (r_ctx != NULL) {
+		gcry_ctx_release (r_ctx);
+		r_ctx = NULL;
+	}
 	if (sexp != NULL) {
 		gcry_sexp_release (sexp);
 		sexp = NULL;
