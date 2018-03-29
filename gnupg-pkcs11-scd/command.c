@@ -974,6 +974,53 @@ cleanup:
 	return gpg_error (error);
 }
 
+static gpg_err_code_t
+get_mech(pkcs11h_certificate_id_t cert_id, CK_MECHANISM_TYPE *mech)
+{
+	unsigned char *blob = NULL;
+	size_t blob_size;
+	gpg_err_code_t error = GPG_ERR_GENERAL;
+	cert_params_t *params = NULL;
+
+	if (
+		(error = get_cert_blob (
+			ctx,
+			cert_id,
+			&blob,
+			&blob_size
+		)) != GPG_ERR_NO_ERROR ||
+		(error = keyutil_get_cert_params (
+			blob,
+			blob_size,
+			&params
+		)) != GPG_ERR_NO_ERROR
+	) {
+		goto cleanup;
+	}
+
+	switch (params->subkey_type) {
+	case KEY_RSA_RSA:
+		*mech = CKM_RSA_PKCS;
+		break;
+	case KEY_ECC_GOST2001:
+		*mech = CKM_GOSTR3410_WITH_GOSTR3411;
+		break;
+	default:
+		error = GPG_ERR_UNSUPPORTED_ALGORITHM;
+	}
+
+ cleanup:
+
+	keyutil_params_free (params);
+
+	if (blob != NULL) {
+		free (blob);
+		blob = NULL;
+	}
+
+	return error;
+}
+
 /** Sign data (set by SETDATA) with certificate id in line. */
 gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 {
@@ -1205,6 +1252,13 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		goto cleanup;
 	}
 
+	CK_MECHANISM_TYPE mech;
+	if (
+		(error = get_mech(cert_id, &mech)) != GPG_ERR_NO_ERROR
+	) {
+		goto cleanup;
+	}
+
 	if (
 		(error = common_map_pkcs11_error (
 			pkcs11h_certificate_create (
@@ -1227,12 +1281,12 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		goto cleanup;
 	}
 	session_locked = 1;
-
+	
 	if (
 		(error = common_map_pkcs11_error (
 			pkcs11h_certificate_signAny (
 				cert,
-				CKM_RSA_PKCS,
+				mech,
 				_data->data,
 				_data->size,
 				NULL,
@@ -1252,7 +1306,7 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		(error = common_map_pkcs11_error (
 			pkcs11h_certificate_signAny (
 				cert,
-				CKM_RSA_PKCS,
+				mech,
 				_data->data,
 				_data->size,
 				sig,
@@ -1349,6 +1403,13 @@ gpg_error_t cmd_pkdecrypt (assuan_context_t ctx, char *line)
 		goto cleanup;
 	}
 
+	CK_MECHANISM_TYPE mech;
+	if (
+		(error = get_mech(cert_id, &mech)) != GPG_ERR_NO_ERROR
+	) {
+		goto cleanup;
+	}
+
 	if (
 		(error = common_map_pkcs11_error (
 			pkcs11h_certificate_create (
@@ -1376,7 +1437,7 @@ gpg_error_t cmd_pkdecrypt (assuan_context_t ctx, char *line)
 		(error = common_map_pkcs11_error (
 			pkcs11h_certificate_decryptAny (
 				cert,
-				CKM_RSA_PKCS, 
+				mech,
 				_data.data,
 				_data.size,
 				NULL,
@@ -1396,7 +1457,7 @@ gpg_error_t cmd_pkdecrypt (assuan_context_t ctx, char *line)
 		(error = common_map_pkcs11_error (
 			pkcs11h_certificate_decryptAny (
 				cert,
-				CKM_RSA_PKCS, 
+				mech,
 				_data.data,
 				_data.size,
 				ptext,

@@ -32,9 +32,11 @@
 #define __KEYUTIL_H
 
 typedef enum {KEY_RSA, KEY_ECC} key_type_t;
+typedef enum {KEY_RSA_RSA, KEY_ECC_GOST2001} key_subtype_t;
 
 typedef struct {
 	key_type_t key_type;
+	key_subtype_t key_subtype;
 	int nid;
 	gcry_mpi_t a;
 	gcry_mpi_t b;
