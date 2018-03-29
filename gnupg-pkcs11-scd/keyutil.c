@@ -90,7 +90,7 @@ keyutil_get_cert_params (
 	}
 
 	(*params)->key_type = KEY_RSA;
-	(*params)->subkey_type = KEY_RSA_RSA;
+	(*params)->key_subtype = KEY_RSA_RSA;
 
 	if (
 		gcry_mpi_scan(&(*params)->a, GCRYMPI_FMT_USG, m.data, m.size, NULL) ||
@@ -113,13 +113,13 @@ keyutil_get_cert_params (
 	switch (pubkey->type) {
 	case EVP_PKEY_RSA:
 		(*params)->key_type = KEY_RSA;
-		(*params)->subkey_type = KEY_RSA_RSA;
+		(*params)->key_subtype = KEY_RSA_RSA;
 		a_hex = BN_bn2hex (pubkey->pkey.rsa->n);
 		b_hex = BN_bn2hex (pubkey->pkey.rsa->e);
 		break;
 	case EVP_PKEY_GOSTR01:
 		(*params)->key_type = KEY_ECC;
-		(*params)->subkey_type = KEY_ECC_GOST2001;
+		(*params)->key_subtype = KEY_ECC_GOST2001;
 		const EC_GROUP *group = GOST_KEY_get0_group(pubkey->pkey.gost);
 		const EC_POINT *pub_key = GOST_KEY_get0_public_key(pubkey->pkey.gost);
 		BIGNUM *X = BN_new(), *Y = BN_new(), *Z = BN_new();;

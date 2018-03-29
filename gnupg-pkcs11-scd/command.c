@@ -998,7 +998,7 @@ get_mech(pkcs11h_certificate_id_t cert_id, CK_MECHANISM_TYPE *mech)
 		goto cleanup;
 	}
 
-	switch (params->subkey_type) {
+	switch (params->key_subtype) {
 	case KEY_RSA_RSA:
 		*mech = CKM_RSA_PKCS;
 		break;
