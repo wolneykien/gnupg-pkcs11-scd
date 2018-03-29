@@ -974,6 +974,9 @@ cleanup:
 	return gpg_error (error);
 }
 
+#define CKM_GOSTR3410					0x00001201
+#define CKM_GOSTR3410_WITH_GOSTR3411	0x00001202
+
 static gpg_err_code_t
 get_mech(assuan_context_t ctx,
 		 pkcs11h_certificate_id_t cert_id,
