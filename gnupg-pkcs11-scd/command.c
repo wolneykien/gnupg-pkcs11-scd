@@ -975,7 +975,9 @@ cleanup:
 }
 
 static gpg_err_code_t
-get_mech(pkcs11h_certificate_id_t cert_id, CK_MECHANISM_TYPE *mech)
+get_mech(assuan_context_t ctx,
+		 pkcs11h_certificate_id_t cert_id,
+		 CK_MECHANISM_TYPE *mech)
 {
 	unsigned char *blob = NULL;
 	size_t blob_size;
@@ -1254,7 +1256,7 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 
 	CK_MECHANISM_TYPE mech;
 	if (
-		(error = get_mech(cert_id, &mech)) != GPG_ERR_NO_ERROR
+		(error = get_mech(ctx, cert_id, &mech)) != GPG_ERR_NO_ERROR
 	) {
 		goto cleanup;
 	}
@@ -1405,7 +1407,7 @@ gpg_error_t cmd_pkdecrypt (assuan_context_t ctx, char *line)
 
 	CK_MECHANISM_TYPE mech;
 	if (
-		(error = get_mech(cert_id, &mech)) != GPG_ERR_NO_ERROR
+		(error = get_mech(ctx, cert_id, &mech)) != GPG_ERR_NO_ERROR
 	) {
 		goto cleanup;
 	}
