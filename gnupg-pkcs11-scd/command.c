@@ -1106,6 +1106,26 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		error = GPG_ERR_INV_DATA;
 		goto cleanup;
 	}
+
+	if (
+		(error = _get_certificate_by_name (
+			ctx,
+			line,
+			OPENPGP_SIGN,
+			&cert_id,
+			NULL
+		)) != GPG_ERR_NO_ERROR
+	) {
+		goto cleanup;
+	}
+
+	CK_MECHANISM_TYPE mech;
+	if (
+		(error = get_mech(ctx, cert_id, &mech)) != GPG_ERR_NO_ERROR
+	) {
+		goto cleanup;
+	}
+	
 	/*
 	 * sender prefixed data with algorithm OID
 	 */
@@ -1166,26 +1186,32 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		}
 	}
 	else {
-		if (
-			data->size == 0x10 + sizeof (md5_prefix) ||
-			data->size == 0x14 + sizeof (sha1_prefix) ||
-			data->size == 0x14 + sizeof (rmd160_prefix)
-		) {
+		switch (mech) {
+		case CKM_GOSTR3410_WITH_GOSTR3411:
+			inject = INJECT_NONE;
+			break;
+		default:
 			if (
-				memcmp (data->data, md5_prefix, sizeof (md5_prefix)) &&
-				memcmp (data->data, sha1_prefix, sizeof (sha1_prefix)) &&
-				memcmp (data->data, rmd160_prefix, sizeof (rmd160_prefix))
+				data->size == 0x10 + sizeof (md5_prefix) ||
+				data->size == 0x14 + sizeof (sha1_prefix) ||
+				data->size == 0x14 + sizeof (rmd160_prefix)
 			) {
-				error = GPG_ERR_UNSUPPORTED_ALGORITHM;
-				goto cleanup;
+				if (
+					memcmp (data->data, md5_prefix, sizeof (md5_prefix)) &&
+					memcmp (data->data, sha1_prefix, sizeof (sha1_prefix)) &&
+					memcmp (data->data, rmd160_prefix, sizeof (rmd160_prefix))
+				) {
+					error = GPG_ERR_UNSUPPORTED_ALGORITHM;
+					goto cleanup;
+				}
 			}
-		}
-		else {
-			/*
-			 * unknown hash algorithm;
-			 * gnupg's scdaemon forces to SHA1
-			 */
-			inject = INJECT_SHA1;
+			else {
+				/*
+				 * unknown hash algorithm;
+				 * gnupg's scdaemon forces to SHA1
+				 */
+				inject = INJECT_SHA1;
+			}
 		}
 	}
 
@@ -1243,25 +1269,6 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		_data->size += oid_size;
 		memmove (_data->data+_data->size, data->data, data->size);
 		_data->size += data->size;
-	}
-
-	if (
-		(error = _get_certificate_by_name (
-			ctx,
-			line,
-			OPENPGP_SIGN,
-			&cert_id,
-			NULL
-		)) != GPG_ERR_NO_ERROR
-	) {
-		goto cleanup;
-	}
-
-	CK_MECHANISM_TYPE mech;
-	if (
-		(error = get_mech(ctx, cert_id, &mech)) != GPG_ERR_NO_ERROR
-	) {
-		goto cleanup;
 	}
 
 	if (
