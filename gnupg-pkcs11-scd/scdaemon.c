@@ -787,6 +787,37 @@ static char *get_home_dir (void) {
 	return home_dir;
 }
 
+static void
+my_gcry_logger (void *dummy, int level, const char *fmt, va_list arg_ptr)
+{
+  (void) dummy;
+
+  /* Map the log levels.  */
+  common_log_t my_level;
+  switch (level) {
+  case GCRY_LOG_CONT: 
+  case GCRY_LOG_INFO:
+	  my_level = LOG_INFO;
+	  break;
+  case GCRY_LOG_WARN:
+	  my_level = LOG_WARNING;
+	  break;
+  case GCRY_LOG_ERROR:
+	  my_level = LOG_ERROR;
+	  break;
+  case GCRY_LOG_FATAL:
+  case GCRY_LOG_BUG:
+	  my_level = LOG_FATAL;
+	  break;
+  case GCRY_LOG_DEBUG:
+	  my_level = LOG_DEBUG;
+	  break;
+  default:
+	  level = LOG_ERROR;
+  }
+  common_vlog ( my_level, fmt, arg_ptr );
+}
+
 int main (int argc, char *argv[])
 {
 	enum {
@@ -1006,6 +1037,8 @@ int main (int argc, char *argv[])
 #endif
 		);
 	}
+
+	gcry_set_log_handler (my_gcry_logger, NULL);
 
 	if (!gcry_check_version (GCRYPT_VERSION)) {
 		common_log (LOG_FATAL, "Cannot initialize libcrypt");
