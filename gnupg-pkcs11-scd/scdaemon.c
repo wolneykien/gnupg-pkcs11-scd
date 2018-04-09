@@ -788,15 +788,15 @@ static char *get_home_dir (void) {
 }
 
 static void
-my_gcry_logger (void *dummy, int level, const char *fmt, va_list arg_ptr)
+my_gcry_logger (void * _global, int level, const char *fmt, va_list arg_ptr)
 {
-  (void) dummy;
+  global_t *global = (global_t *) _global;
 
   /* Map the log levels.  */
   switch ( level ) {
   case GCRY_LOG_CONT: 
   case GCRY_LOG_INFO:
-	  if ( !global.config.verbose ) return;
+	  if ( !global->config.verbose ) return;
 	  break;
   case GCRY_LOG_WARN:
   case GCRY_LOG_ERROR:
@@ -804,7 +804,7 @@ my_gcry_logger (void *dummy, int level, const char *fmt, va_list arg_ptr)
   case GCRY_LOG_BUG:
 	  break;
   case GCRY_LOG_DEBUG:
-	  if ( !global.config.debug ) return;
+	  if ( !global->config.debug ) return;
 	  break;
   }
   
@@ -1033,7 +1033,7 @@ int main (int argc, char *argv[])
 		);
 	}
 
-	gcry_set_log_handler (my_gcry_logger, NULL);
+	gcry_set_log_handler (my_gcry_logger, &global);
 
 	if (!gcry_check_version (GCRYPT_VERSION)) {
 		common_log (LOG_FATAL, "Cannot initialize libcrypt");
