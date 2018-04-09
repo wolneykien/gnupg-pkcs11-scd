@@ -807,8 +807,12 @@ my_gcry_logger (void * _global, int level, const char *fmt, va_list arg_ptr)
 	  if ( !global->config.debug ) return;
 	  break;
   }
-  
-  vfprintf (common_get_log_stream (), fmt, arg_ptr);
+
+  FILE *log_stream = common_get_log_stream ();
+  if ( log_stream ) {
+	  vfprintf (log_stream, fmt, arg_ptr);
+	  fflush (log_stream);
+  }
 
   if ( level == GCRY_LOG_FATAL ) exit (1);
 }
