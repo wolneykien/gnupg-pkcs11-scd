@@ -793,29 +793,24 @@ my_gcry_logger (void *dummy, int level, const char *fmt, va_list arg_ptr)
   (void) dummy;
 
   /* Map the log levels.  */
-  common_log_t my_level;
-  switch (level) {
+  switch ( level ) {
   case GCRY_LOG_CONT: 
   case GCRY_LOG_INFO:
-	  my_level = LOG_INFO;
+	  if ( !global.config.verbose ) return;
 	  break;
   case GCRY_LOG_WARN:
-	  my_level = LOG_WARNING;
-	  break;
   case GCRY_LOG_ERROR:
-	  my_level = LOG_ERROR;
-	  break;
   case GCRY_LOG_FATAL:
   case GCRY_LOG_BUG:
-	  my_level = LOG_FATAL;
 	  break;
   case GCRY_LOG_DEBUG:
-	  my_level = LOG_DEBUG;
+	  if ( !global.config.debug ) return;
 	  break;
-  default:
-	  level = LOG_ERROR;
   }
-  common_vlog ( my_level, fmt, arg_ptr );
+  
+  vfprintf (common_get_log_stream (), fmt, arg_ptr);
+
+  if ( level == GCRY_LOG_FATAL ) exit (1);
 }
 
 int main (int argc, char *argv[])
