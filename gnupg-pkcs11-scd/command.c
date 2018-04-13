@@ -1036,6 +1036,19 @@ get_mech(assuan_context_t ctx,
 	return error;
 }
 
+static void
+reverse_buffer (unsigned char *buffer, unsigned int length)
+{
+  unsigned int tmp, i;
+
+  for (i=0; i < length/2; i++)
+    {
+      tmp = buffer[i];
+      buffer[i] = buffer[length-1-i];
+      buffer[length-1-i] = tmp;
+    }
+}
+
 /** Sign data (set by SETDATA) with certificate id in line. */
 gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 {
@@ -1279,6 +1292,10 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		_data->size += oid_size;
 		memmove (_data->data+_data->size, data->data, data->size);
 		_data->size += data->size;
+	}
+
+	if (mech == CKM_GOSTR3410) {
+		reverse_buffer (_data->data, _data->size);
 	}
 
 	if (
