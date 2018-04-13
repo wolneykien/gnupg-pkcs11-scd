@@ -974,8 +974,18 @@ cleanup:
 	return gpg_error (error);
 }
 
+#define CKM_GOSTR3410_KEY_PAIR_GEN		0x00001200
 #define CKM_GOSTR3410					0x00001201
 #define CKM_GOSTR3410_WITH_GOSTR3411	0x00001202
+#define CKM_GOSTR3410_KEY_WRAP			0x00001203
+#define CKM_GOSTR3410_DERIVE			0x00001204
+#define CKM_GOSTR3411					0x00001210
+#define CKM_GOSTR3411_HMAC				0x00001211
+#define CKM_GOST28147_KEY_GEN			0x00001220
+#define CKM_GOST28147_ECB				0x00001221
+#define CKM_GOST28147					0x00001222
+#define CKM_GOST28147_MAC				0x00001223
+#define CKM_GOST28147_KEY_WRAP			0x00001224
 
 static gpg_err_code_t
 get_mech(assuan_context_t ctx,
@@ -1008,7 +1018,7 @@ get_mech(assuan_context_t ctx,
 		*mech = CKM_RSA_PKCS;
 		break;
 	case KEY_ECC_GOST2001:
-		*mech = CKM_GOSTR3410_WITH_GOSTR3411;
+		*mech = CKM_GOSTR3410;
 		break;
 	default:
 		error = GPG_ERR_UNSUPPORTED_ALGORITHM;
@@ -1187,7 +1197,7 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 	}
 	else {
 		switch (mech) {
-		case CKM_GOSTR3410_WITH_GOSTR3411:
+		case CKM_GOSTR3410:
 			inject = INJECT_NONE;
 			break;
 		default:
