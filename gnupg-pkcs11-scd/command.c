@@ -1036,17 +1036,6 @@ get_mech(assuan_context_t ctx,
 	return error;
 }
 
-static void
-swap_halfbytes (unsigned char *buf, size_t len)
-{
-	unsigned char *end = buf + len;
-
-	while (buf < end) {
-		*buf = (*buf << 4 & 0xf0) | (*buf >> 4 & 0x0f);
-		buf = buf + 1;
-	}
-}
-
 /** Sign data (set by SETDATA) with certificate id in line. */
 gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 {
@@ -1290,12 +1279,6 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		_data->size += oid_size;
 		memmove (_data->data+_data->size, data->data, data->size);
 		_data->size += data->size;
-	}
-
-	switch (mech) {
-	case CKM_GOSTR3410:
-		swap_halfbytes (_data->data, _data->size);
-		break;
 	}
 
 	if (
