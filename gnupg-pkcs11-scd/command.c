@@ -1064,6 +1064,8 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		{ 0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86,
 		0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05,
 		0x00, 0x04, 0x40  };
+	static const unsigned char gost94_prefix[] = /* (1.2.643.2.2.3) */
+		{ 0x2a, 0x85, 0x03, 0x02, 0x02, 0x03 };
 
 	gpg_err_code_t error = GPG_ERR_GENERAL;
 	pkcs11h_certificate_id_t cert_id = NULL;
@@ -1085,6 +1087,10 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		INJECT_SHA384,
 		INJECT_SHA512
 	} inject = INJECT_NONE;
+	enum {
+		REJECT_NONE,
+		REJECT_GOST94
+	} reject = REJECT_NONE;
 
 	if (data->data == NULL) {
 		error = GPG_ERR_INV_DATA;
@@ -1199,6 +1205,12 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		switch (mech) {
 		case CKM_GOSTR3410:
 			inject = INJECT_NONE;
+			if (
+				0 == memcmp (data->data, gost94_prefix,
+							  sizeof (gost94_prefix))
+			) {
+				reject = REJECT_GOST94;
+			}
 			break;
 		default:
 			if (
@@ -1279,6 +1291,21 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 		_data->size += oid_size;
 		memmove (_data->data+_data->size, data->data, data->size);
 		_data->size += data->size;
+	}
+
+	if (reject != REJECT_NONE) {
+		size_t oid_size;
+		switch (reject) {
+		case REJECT_GOST94:
+			oid_size = sizeof(gost94_prefix);
+			break;
+		default:
+			error = GPG_ERR_INV_DATA;
+			goto cleanup;
+		}
+
+		_data->size = data->size - oid_size;
+		_data->data = data->data + oid_size;
 	}
 
 	if (
