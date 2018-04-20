@@ -1071,7 +1071,8 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 	pkcs11h_certificate_id_t cert_id = NULL;
 	pkcs11h_certificate_t cert = NULL;
 	cmd_data_t *data = (cmd_data_t *)assuan_get_pointer (ctx);
-	cmd_data_t *_data = data;
+	cmd_data_t data_buf = *data;
+	cmd_data_t *_data = &data_buf;
 	int need_free__data = 0;
 	int session_locked = 0;
 	unsigned char *sig = NULL;
@@ -1274,17 +1275,12 @@ gpg_error_t cmd_pksign (assuan_context_t ctx, char *line)
 				goto cleanup;
 		}
 
-		need_free__data = 1;
-
-		if ((_data = (cmd_data_t *)malloc (sizeof (cmd_data_t))) == NULL) {
-			error = GPG_ERR_ENOMEM;
-			goto cleanup;
-		}
-
 		if ((_data->data = (unsigned char *)malloc (data->size + oid_size)) == NULL) {
 			error = GPG_ERR_ENOMEM;
 			goto cleanup;
 		}
+		
+		need_free__data = 1;
 
 		_data->size = 0;
 		memmove (_data->data+_data->size, oid, oid_size);
@@ -1394,8 +1390,7 @@ cleanup:
 	if (need_free__data) {
 		free (_data->data);
 		_data->data = NULL;
-		free (_data);
-		_data = NULL;
+		_data->size = 0;
 	}
 
 	return gpg_error (error);
