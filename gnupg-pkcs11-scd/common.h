@@ -86,5 +86,7 @@ common_log (
 
 void
 reverse_buffer (unsigned char *buffer, unsigned int length);
+void
+reverse_hex (unsigned char *hex);
 
 #endif

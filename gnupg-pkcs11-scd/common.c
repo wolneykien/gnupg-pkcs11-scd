@@ -123,9 +123,27 @@ reverse_buffer (unsigned char *buffer, unsigned int length)
 {
   unsigned int tmp, i;
 
-  for (i=0; i < length/2; i++) {
+  for (i = 0; i < length/2; i++) {
       tmp = buffer[i];
-      buffer[i] = buffer[length-1-i];
-      buffer[length-1-i] = tmp;
+      buffer[i] = buffer[length - 1 -i];
+      buffer[length - 1 - i] = tmp;
+  }
+}
+
+void
+reverse_hex (unsigned char *hex)
+{
+  unsigned char tmp_l, tmp_h;
+  unsigned int i, length;
+
+  length = strlen (hex);
+
+  for (i = 0; i < length/2 && (i + 1) < length; i += 2) {
+      tmp_h = hex[i];
+	  tmp_l = hex[i + 1];
+      hex[i] = hex[length - 2 - i];
+	  hex[i+1] = hex[length - 1 - i];
+      hex[length - 2 - i] = tmp_h;
+      hex[length - 1 - i] = tmp_l;
   }
 }
