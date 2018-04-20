@@ -118,3 +118,14 @@ common_map_pkcs11_error (int rv) {
 	return error;
 }
 
+void
+reverse_buffer (unsigned char *buffer, unsigned int length)
+{
+  unsigned int tmp, i;
+
+  for (i=0; i < length/2; i++) {
+      tmp = buffer[i];
+      buffer[i] = buffer[length-1-i];
+      buffer[length-1-i] = tmp;
+  }
+}

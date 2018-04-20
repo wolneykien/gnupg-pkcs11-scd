@@ -84,4 +84,7 @@ common_log (
 	...
 );
 
+void
+reverse_buffer (unsigned char *buffer, unsigned int length);
+
 #endif
