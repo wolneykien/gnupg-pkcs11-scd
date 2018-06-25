@@ -116,6 +116,10 @@ keyutil_get_cert_params (
 		(*params)->key_subtype = KEY_RSA_RSA;
 		a_hex = BN_bn2hex (pubkey->pkey.rsa->n);
 		b_hex = BN_bn2hex (pubkey->pkey.rsa->e);
+ 		if (a_hex == NULL || b_hex == NULL) {
+			error = GPG_ERR_BAD_CERT;
+			goto cleanup;
+		}
 		break;
 	case EVP_PKEY_GOSTR01:
 		(*params)->key_type = KEY_ECC;
@@ -125,9 +129,9 @@ keyutil_get_cert_params (
 		BIGNUM *X = BN_new(), *Y = BN_new(), *Z = BN_new();;
 		(*params)->nid = EC_GROUP_get_curve_name(group);
 		int ret = EC_POINT_get_Jprojective_coordinates_GFp(group,
-														   pub_key,
-														   X, Y, Z,
-														   NULL);
+								   pub_key,
+								   X, Y, Z,
+								   NULL);
 		if (ret) {
 			a_hex = BN_bn2hex (X);
 			b_hex = BN_bn2hex (Y);
@@ -138,21 +142,20 @@ keyutil_get_cert_params (
 			error = GPG_ERR_BAD_CERT;
 			goto cleanup;
 		}
+ 		if (a_hex == NULL || b_hex == NULL || c_hex == NULL) {
+			error = GPG_ERR_BAD_CERT;
+			goto cleanup;
+		}
 		break;
 	default:
 		error = GPG_ERR_WRONG_PUBKEY_ALGO;
 		goto cleanup;
 	}
-
-	if (a_hex == NULL || b_hex == NULL || c_hex == NULL) {
-		error = GPG_ERR_BAD_CERT;
-		goto cleanup;
-	}
  
 	if (
-		gcry_mpi_scan (&(*params)->a, GCRYMPI_FMT_HEX, a_hex, 0, NULL) ||
-		gcry_mpi_scan (&(*params)->b, GCRYMPI_FMT_HEX, b_hex, 0, NULL) ||
-		gcry_mpi_scan (&(*params)->c, GCRYMPI_FMT_HEX, c_hex, 0, NULL)
+		a_hex && gcry_mpi_scan (&(*params)->a, GCRYMPI_FMT_HEX, a_hex, 0, NULL) ||
+		b_hex && gcry_mpi_scan (&(*params)->b, GCRYMPI_FMT_HEX, b_hex, 0, NULL) ||
+		c_hex && gcry_mpi_scan (&(*params)->c, GCRYMPI_FMT_HEX, c_hex, 0, NULL)
 	) {
 		error = GPG_ERR_BAD_KEY;		
 		goto cleanup;
