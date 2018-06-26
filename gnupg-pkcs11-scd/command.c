@@ -1457,6 +1457,7 @@ gpg_error_t cmd_pkdecrypt (assuan_context_t ctx, char *line)
 	switch (mech) {
 		case CKM_GOSTR3410:
 			mech = CKM_GOSTR3410_DERIVE;
+			if ( _data.size > 64) _data.size = 64;
 			break;
 	}
 
@@ -1483,19 +1484,25 @@ gpg_error_t cmd_pkdecrypt (assuan_context_t ctx, char *line)
 	}
 	session_locked = 1;
 
-	if (
-		(error = common_map_pkcs11_error (
-			pkcs11h_certificate_decryptAny (
-				cert,
-				mech,
-				_data.data,
-				_data.size,
-				NULL,
-				&ptext_len
-			)
-		)) != GPG_ERR_NO_ERROR
-	) {
-		goto cleanup;
+	switch ( mech ) {
+	case CKM_GOSTR3410_DERIVE:
+		ptext_len = 64;
+		break;
+	default:
+		if (
+			(error = common_map_pkcs11_error (
+				pkcs11h_certificate_decryptAny (
+					cert,
+					mech,
+					_data.data,
+					_data.size,
+					NULL,
+					&ptext_len
+				)
+			)) != GPG_ERR_NO_ERROR
+		) {
+			goto cleanup;
+		}
 	}
 
 	if ((ptext = (unsigned char *)malloc (ptext_len)) == NULL) {
