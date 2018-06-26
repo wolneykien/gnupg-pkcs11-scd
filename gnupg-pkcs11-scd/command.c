@@ -1454,6 +1454,12 @@ gpg_error_t cmd_pkdecrypt (assuan_context_t ctx, char *line)
 		goto cleanup;
 	}
 
+	swith (mech) {
+		case CKM_GOSTR3410:
+			mech = CKM_GOSTR3410_DERIVE;
+			break;
+	}
+
 	if (
 		(error = common_map_pkcs11_error (
 			pkcs11h_certificate_create (
