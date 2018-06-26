@@ -1454,7 +1454,7 @@ gpg_error_t cmd_pkdecrypt (assuan_context_t ctx, char *line)
 		goto cleanup;
 	}
 
-	swith (mech) {
+	switch (mech) {
 		case CKM_GOSTR3410:
 			mech = CKM_GOSTR3410_DERIVE;
 			break;
