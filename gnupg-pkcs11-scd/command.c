@@ -1462,6 +1462,7 @@ gpg_error_t cmd_pkdecrypt (assuan_context_t ctx, char *line)
 				memcpy (_data.data + 8, _data.data + 9, _data.size - 9);
 				_data.size--;
 			}
+			reverse_buffer (_data.data, 8);
 			reverse_buffer (_data.data + 8, (_data.size - 8) / 2);
 			reverse_buffer (_data.data + 8 + (_data.size - 8) / 2,
 							(_data.size - 8) / 2);
