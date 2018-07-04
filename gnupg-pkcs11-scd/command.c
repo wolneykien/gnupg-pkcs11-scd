@@ -1457,6 +1457,14 @@ gpg_error_t cmd_pkdecrypt (assuan_context_t ctx, char *line)
 	switch (mech) {
 		case CKM_GOSTR3410:
 			mech = CKM_GOSTR3410_DERIVE;
+			if (_data.size % 2 && _data.data[8] == 0x04) {
+				// Uncompressed point (the first 8 bytes is the UKM)
+				memcpy (_data.data + 8, _data.data + 9, _data.size - 9);
+				_data.size--;
+			}
+			reverse_buffer (_data.data + 8, (_data.size - 8) / 2);
+			reverse_buffer (_data.data + 8 + (_data.size - 8) / 2,
+							(_data.size - 8) / 2);
 			break;
 	}
 
