@@ -1457,8 +1457,6 @@ gpg_error_t cmd_pkdecrypt (assuan_context_t ctx, char *line)
 	switch (mech) {
 		case CKM_GOSTR3410:
 			mech = CKM_GOSTR3410_DERIVE;
-			_data.size--;
-			_data.data++;
 			break;
 	}
 
